@@ -19,8 +19,8 @@ SESSIONS = {}
 def hash_password(password, salt):
     return hashlib.sha256((password + salt).encode('utf-8')).hexdigest()
 
-def create_session_id():
-    return format(random.getrandbits(64), 'x')  
+def create_sessionID():
+    return '0x' + format(random.getrandbits(64), 'x')
 
 
 def verify_credentials(username, password):
@@ -51,36 +51,34 @@ def handle_post_request(request_data):
         return "HTTP/1.0 501 Not Implemented\r\n\r\n"
     
     if verify_credentials(username, password):
-        session_id = create_session_id()
-        SESSIONS[session_id] = {'username': username, 'expires': datetime.datetime.now() + datetime.timedelta(seconds=SESSION_TIMEOUT)}
+        sessionID = create_sessionID()
+        SESSIONS[sessionID] = {'username': username, 'expires': datetime.datetime.now() + datetime.timedelta(seconds=SESSION_TIMEOUT)}
         log_message(f"LOGIN SUCCESSFUL: {username} : {password}")
-        return f"HTTP/1.0 200 OK\r\nSet-Cookie: session_id={session_id}\r\n\r\nLogged in!"
+        return f"HTTP/1.0 200 OK\r\nSet-Cookie: sessionID={sessionID}\r\n\r\nLogged in!"
     else:
         log_message(f"LOGIN FAILED: {username} : {password}")
         return "HTTP/1.0 200 OK\r\n\r\nLogin failed!"
 
 def get_session_from_cookie(cookie_string):
-    session_id = None
-    if 'session_id' in cookie_string:
-        # Split the cookie string by the semicolon
+    sessionID = None
+    if 'sessionID' in cookie_string:
         cookies = cookie_string.split(';')
         for cookie in cookies:
-            # Further split each cookie by equal sign to separate name and value
             cookie_parts = cookie.split('=')
-            if len(cookie_parts) == 2 and cookie_parts[0].strip() == 'session_id':
-                session_id = cookie_parts[1].strip()
+            if len(cookie_parts) == 2 and cookie_parts[0].strip() == 'sessionID':
+                sessionID = cookie_parts[1].strip()
                 break
-    return session_id
+    return sessionID
 def handle_get_request(request_data, request_target):
     headers = dict(line.split(": ", 1) for line in request_data.split("\r\n") if ": " in line)
     cookie_string = headers.get("Cookie", "")
-    session_id = get_session_from_cookie(cookie_string)
+    sessionID = get_session_from_cookie(cookie_string)
 
-    if not session_id:
+    if not sessionID:
         log_message(f"COOKIE INVALID: {request_target}")
         return "HTTP/1.0 401 Unauthorized\r\n\r\n"
 
-    session = SESSIONS.get(session_id)
+    session = SESSIONS.get(sessionID)
     if not session:
         log_message(f"SESSION INVALID: No matching session found")
         return "HTTP/1.0 401 Unauthorized\r\n\r\n"
@@ -89,17 +87,11 @@ def handle_get_request(request_data, request_target):
     if session['expires'] < datetime.datetime.now():
         log_message(f"SESSION EXPIRED: {username} : {request_target}")
         return "HTTP/1.0 401 Unauthorized\r\n\r\n"
-
-    # Update session expiry
-    SESSIONS[session_id]['expires'] = datetime.datetime.now() + datetime.timedelta(seconds=SESSION_TIMEOUT)
-    
-    # Construct the file path and ensure it is under the user's directory
+    SESSIONS[sessionID]['expires'] = datetime.datetime.now() + datetime.timedelta(seconds=SESSION_TIMEOUT)
     filepath = f"{ROOT_DIRECTORY}/{username}/{request_target}"
     if ".." in filepath or not filepath.startswith(f"{ROOT_DIRECTORY}/{username}/"):
         log_message(f"GET FAILED: {username} : {request_target}")
         return "HTTP/1.0 404 Not Found\r\n\r\n"
-
-    # Read the file content if it exists
     try:
         with open(filepath, 'r') as file:
             file_contents = file.read()
@@ -109,11 +101,15 @@ def handle_get_request(request_data, request_target):
         log_message(f"GET FAILED: {username} : {request_target}")
         return "HTTP/1.0 404 Not Found\r\n\r\n"
 
-def start_server():
+def start_server(IP, PORT, ACCOUNTS_FILE, SESSION_TIMEOUT, ROOT_DIRECTORY):
+    with open(ACCOUNTS_FILE, 'r') as accounts_file:
+        accounts_data = json.load(accounts_file)
+
+    SESSIONS = {}
+
     server_socket = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
     server_socket.bind((IP, PORT))
     server_socket.listen(5)
-    log_message(f"Starting HTTP server on {IP}:{PORT}")
 
     while True:
         client_connection, client_address = server_socket.accept()
@@ -133,4 +129,10 @@ def start_server():
         client_connection.close()
 
 if __name__ == "__main__":
-    start_server()
+    IP = sys.argv[1]
+    PORT = int(sys.argv[2])
+    ACCOUNTS_FILE = sys.argv[3]
+    SESSION_TIMEOUT = int(sys.argv[4])
+    ROOT_DIRECTORY = sys.argv[5]
+
+    start_server(IP, PORT, ACCOUNTS_FILE, SESSION_TIMEOUT, ROOT_DIRECTORY)
