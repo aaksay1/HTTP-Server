@@ -79,8 +79,9 @@ def handle_get_request(request_data, request_target):
         return "HTTP/1.0 401 Unauthorized\r\n\r\n"
 
     session = SESSIONS.get(sessionID)
+
     if not session:
-        log_message(f"SESSION INVALID: No matching session found")
+        log_message(f"COOKIE INVALID: {request_target}")
         return "HTTP/1.0 401 Unauthorized\r\n\r\n"
 
     username = session['username']
@@ -91,7 +92,7 @@ def handle_get_request(request_data, request_target):
     filepath = f"{ROOT_DIRECTORY}/{username}/{request_target}"
     if ".." in filepath or not filepath.startswith(f"{ROOT_DIRECTORY}/{username}/"):
         log_message(f"GET FAILED: {username} : {request_target}")
-        return "HTTP/1.0 404 Not Found\r\n\r\n"
+        return "HTTP/1.0 404 NOT FOUND\r\n\r\n"
     try:
         with open(filepath, 'r') as file:
             file_contents = file.read()
@@ -99,7 +100,7 @@ def handle_get_request(request_data, request_target):
         return f"HTTP/1.0 200 OK\r\n\r\n{file_contents}"
     except FileNotFoundError:
         log_message(f"GET FAILED: {username} : {request_target}")
-        return "HTTP/1.0 404 Not Found\r\n\r\n"
+        return "HTTP/1.0 404 NOT FOUND\r\n\r\n"
 
 def start_server(IP, PORT, ACCOUNTS_FILE, SESSION_TIMEOUT, ROOT_DIRECTORY):
     with open(ACCOUNTS_FILE, 'r') as accounts_file:
